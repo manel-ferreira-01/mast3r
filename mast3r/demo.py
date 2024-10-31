@@ -136,10 +136,33 @@ def get_3D_model_from_scene(silent, scene_state, min_conf_thr=2, as_pointcloud=F
                                         transparent_cams=transparent_cams, cam_size=cam_size, silent=silent)
 
 
-def get_reconstructed_scene(outdir, gradio_delete_cache, model, device, silent, image_size, current_scene_state,
-                            filelist, optim_level, lr1, niter1, lr2, niter2, min_conf_thr, matching_conf_thr,
-                            as_pointcloud, mask_sky, clean_depth, transparent_cams, cam_size, scenegraph_type, winsize,
-                            win_cyclic, refid, TSDF_thresh, shared_intrinsics, **kw):
+def get_reconstructed_scene(outdir,
+                            gradio_delete_cache,
+                            model,
+                            device,
+                            silent=False, 
+                            image_size=512,
+                            current_scene_state=None,
+                            filelist="./images_in", 
+                            optim_level="refine+depth", 
+                            lr1=0.07, 
+                            niter1=500,
+                            lr2=0.014, 
+                            niter2=200, 
+                            min_conf_thr=1.5, 
+                            matching_conf_thr=5.,
+                            as_pointcloud=True, 
+                            mask_sky=False, 
+                            clean_depth=True, 
+                            transparent_cams=False, 
+                            cam_size=0.2, 
+                            scenegraph_type='complete', 
+                            winsize=1,
+                            win_cyclic=False, 
+                            refid=0, 
+                            TSDF_thresh=0, 
+                            shared_intrinsics=True, 
+                            **kw):
     """
     from a list of images, run mast3r inference, sparse global aligner.
     then run get_3D_model_from_scene
