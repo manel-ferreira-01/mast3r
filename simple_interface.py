@@ -61,7 +61,6 @@ scene = scene.sparse_ga
 mask = to_numpy(scene.get_masks())
 pts3d, depthmaps, confs = to_numpy(scene.get_dense_pts3d(clean_depth=True))
 pts3d_clr = to_numpy(scene.get_pts3d_colors())
-#confs work for single camera
 
 rgbimgs = scene.imgs
 focals = scene.get_focals().cpu()
