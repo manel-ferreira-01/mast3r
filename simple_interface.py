@@ -43,6 +43,8 @@ model = AsymmetricMASt3R.from_pretrained("./docker/files/checkpoints/MASt3R_ViTL
 
 #scenegraphy
 win_col, winsize, win_cyclic, refid = set_scenegraph_options(filelist, False, 0, "complete")
+winsize = 2
+win_cyclic = False
 
 # Get the 3D model from the scene - one function, full pipeline
 scene, _ = get_reconstructed_scene(outdir=outdir,
@@ -51,10 +53,12 @@ scene, _ = get_reconstructed_scene(outdir=outdir,
                                    device=device,
                                    filelist=filelist,
                                    shared_intrinsics=True,
-                                   optim_level="coarse",
+                                   optim_level="refine",
+                                   scenegraph_type="complete",
                                    winsize=winsize,
                                    win_cyclic=win_cyclic, 
                                    refid=refid)
+
 #unpack scene
 scene = scene.sparse_ga
 
@@ -66,10 +70,13 @@ rgbimgs = scene.imgs
 focals = scene.get_focals().cpu()
 cams2world = scene.get_im_poses().cpu()
 
+# THIS DOES NOT WORK FOR IMAGES WITH DIFFERENT SIZES
 # world frame
 pts3d = np.concatenate([p[m] for p, m in zip(pts3d, mask)])
+
 pts3d_clr = np.concatenate([p[m] for p, m in zip(rgbimgs, mask)])
 pts3d_clr = pts3d_clr.reshape(-1,3)
+
 confs_wrld = np.concatenate([p[m] for p, m in zip(confs, mask)])
 confs_wrld = confs_wrld.reshape(-1,1) / np.max(confs_wrld)
 
