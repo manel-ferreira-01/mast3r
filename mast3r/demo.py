@@ -161,7 +161,8 @@ def get_reconstructed_scene(outdir,
                             win_cyclic=False, 
                             refid=0, 
                             TSDF_thresh=0, 
-                            shared_intrinsics=True, 
+                            shared_intrinsics=True,
+                            pairs=None,
                             **kw):
     """
     from a list of images, run mast3r inference, sparse global aligner.
@@ -173,15 +174,20 @@ def get_reconstructed_scene(outdir,
         imgs[1]['idx'] = 1
         filelist = [filelist[0], filelist[0] + '_2']
 
-    scene_graph_params = [scenegraph_type]
-    if scenegraph_type in ["swin", "logwin"]:
-        scene_graph_params.append(str(winsize))
-    elif scenegraph_type == "oneref":
-        scene_graph_params.append(str(refid))
-    if scenegraph_type in ["swin", "logwin"] and not win_cyclic:
-        scene_graph_params.append('noncyclic')
-    scene_graph = '-'.join(scene_graph_params)
-    pairs = make_pairs(imgs, scene_graph=scene_graph, prefilter=None, symmetrize=True)
+    #print("filelist", filelist)
+
+    if pairs is None:
+        scene_graph_params = [scenegraph_type]
+        if scenegraph_type in ["swin", "logwin"]:
+            scene_graph_params.append(str(winsize))
+        elif scenegraph_type == "oneref":
+            scene_graph_params.append(str(refid))
+        if scenegraph_type in ["swin", "logwin"] and not win_cyclic:
+            scene_graph_params.append('noncyclic')
+        scene_graph = '-'.join(scene_graph_params)
+        pairs = make_pairs(imgs, scene_graph=scene_graph, prefilter=None, symmetrize=True)
+
+    print(pairs)
     if optim_level == 'coarse':
         niter2 = 0
 
