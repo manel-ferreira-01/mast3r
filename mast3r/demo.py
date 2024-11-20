@@ -184,6 +184,7 @@ def get_reconstructed_scene(outdir,
     pairs = make_pairs(imgs, scene_graph=scene_graph, prefilter=None, symmetrize=True)
     if optim_level == 'coarse':
         niter2 = 0
+
     # Sparse GA (forward mast3r -> matching -> 3D optim -> 2D refinement -> triangulation)
     if current_scene_state is not None and \
         not current_scene_state.should_delete and \
@@ -194,10 +195,12 @@ def get_reconstructed_scene(outdir,
     else:
         cache_dir = os.path.join(outdir, 'cache')
     os.makedirs(cache_dir, exist_ok=True)
+
     scene = sparse_global_alignment(filelist, pairs, cache_dir,
                                     model, lr1=lr1, niter1=niter1, lr2=lr2, niter2=niter2, device=device,
                                     opt_depth='depth' in optim_level, shared_intrinsics=shared_intrinsics,
                                     matching_conf_thr=matching_conf_thr, **kw)
+    
     if current_scene_state is not None and \
         not current_scene_state.should_delete and \
             current_scene_state.outfile_name is not None:
