@@ -108,6 +108,7 @@ def merge_corres(idx1, idx2, shape1=None, shape2=None, ret_xy=True, ret_index=Fa
 
 def fast_reciprocal_NNs(pts1, pts2, subsample_or_initxy1=8, ret_xy=True, pixel_tol=0, ret_basin=False,
                         device='cuda', **matcher_kw):
+    
     H1, W1, DIM1 = pts1.shape
     H2, W2, DIM2 = pts2.shape
     assert DIM1 == DIM2

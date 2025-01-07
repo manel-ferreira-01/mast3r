@@ -58,8 +58,10 @@ class AsymmetricMASt3R(AsymmetricCroCo3DStereo):
         self.head_type = head_type
         self.depth_mode = depth_mode
         self.conf_mode = conf_mode
+        
         if self.desc_conf_mode is None:
             self.desc_conf_mode = conf_mode
+
         # allocate heads
         self.downstream_head1 = mast3r_head_factory(head_type, output_mode, self, has_conf=bool(conf_mode))
         self.downstream_head2 = mast3r_head_factory(head_type, output_mode, self, has_conf=bool(conf_mode))

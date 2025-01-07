@@ -15,6 +15,7 @@ from collections import namedtuple
 from functools import lru_cache
 from scipy import sparse as sp
 import copy
+import time
 
 from mast3r.utils.misc import mkdir_for, hash_md5
 from mast3r.cloud_opt.utils.losses import gamma_loss
@@ -133,6 +134,7 @@ def sparse_global_alignment(imgs, pairs_in, cache_path, model, subsample=8, desc
     pairs, cache_path = forward_mast3r(pairs_in, model,
                                        cache_path=cache_path, subsample=subsample,
                                        desc_conf=desc_conf, device=device)
+    #pairs are the paths to the mast3r cache files
 
     # extract canonical pointmaps
     tmp_pairs, pairwise_scores, canonical_views, canonical_paths, preds_21 = \
@@ -152,8 +154,10 @@ def sparse_global_alignment(imgs, pairs_in, cache_path, model, subsample=8, desc
     imgs, res_coarse, res_fine = sparse_scene_optimizer(
         imgs, subsample, imsizes, pps, base_focals, core_depth, anchors, corres, corres2d, preds_21, canonical_paths, mst,
         shared_intrinsics=shared_intrinsics, cache_path=cache_path, device=device, dtype=dtype, **kw)
+    
+    scene = SparseGA(imgs, pairs_in, res_fine or res_coarse, anchors, canonical_paths)
 
-    return SparseGA(imgs, pairs_in, res_fine or res_coarse, anchors, canonical_paths)
+    return scene, imgs, res_coarse, res_fine
 
 
 def sparse_scene_optimizer(imgs, subsample, imsizes, pps, base_focals, core_depth, anchors, corres, corres2d,
@@ -168,6 +172,7 @@ def sparse_scene_optimizer(imgs, subsample, imsizes, pps, base_focals, core_dept
                            init={}, device='cuda', dtype=torch.float32,
                            matching_conf_thr=5., loss_dust3r_w=0.01,
                            verbose=True, dbg=()):
+    
     init = copy.deepcopy(init)
     # extrinsic parameters
     vec0001 = torch.tensor((0, 0, 0, 1), dtype=dtype, device=device)
@@ -197,7 +202,7 @@ def sparse_scene_optimizer(imgs, subsample, imsizes, pps, base_focals, core_dept
             core_depth[idx] = depth.detach()
 
         median_depths[idx] = med_depth = core_depth[idx].median()
-        core_depth[idx] /= med_depth
+        core_depth[idx] /= med_depth # depth is normalized ???
 
         cam2w = init_values.get('cam2w')
         if cam2w is not None:
@@ -254,7 +259,7 @@ def sparse_scene_optimizer(imgs, subsample, imsizes, pps, base_focals, core_dept
 
         # camera are defined as a kinematic chain
         tmp_cam2w = [None] * len(K)
-        tmp_cam2w[mst[0]] = rel_cam2cam[mst[0]]
+        tmp_cam2w[mst[0]] = rel_cam2cam[mst[0]] # TODO: check if what is this
         for i, j in mst[1]:
             # i is the cam_i_to_world reference, j is the relative pose = cam_j_to_cam_i
             tmp_cam2w[j] = tmp_cam2w[i] @ rel_cam2cam[j]
@@ -311,6 +316,8 @@ def sparse_scene_optimizer(imgs, subsample, imsizes, pps, base_focals, core_dept
     # Prepare slices and corres for losses
     dust3r_slices = [s for s in imgs_slices if not is_matching_ok[s.img1, s.img2]]
     loss3d_slices = [s for s in imgs_slices if is_matching_ok[s.img1, s.img2]]
+
+    # THIS IS FOR 2D MATHCING
     cleaned_corres2d = []
     for cci, (img1, pix1, confs, confsum, imgs_slices) in enumerate(corres2d):
         cf_sum = 0
@@ -359,6 +366,8 @@ def sparse_scene_optimizer(imgs, subsample, imsizes, pps, base_focals, core_dept
                 pts3d_2.append(pts3d[s.img2][s.slice2])
                 confs.append(s.confs)
         else:
+
+            # this is for a pair
             pts3d_1 = [pts3d[s.img1][s.slice1] for s in loss3d_slices]
             pts3d_2 = [pts3d[s.img2][s.slice2] for s in loss3d_slices]
             confs = [s.confs for s in loss3d_slices]
@@ -409,13 +418,13 @@ def sparse_scene_optimizer(imgs, subsample, imsizes, pps, base_focals, core_dept
                 adjust_learning_rate_by_lr(optimizer, lr)
                 pix_loss = ploss(1 - alpha)
                 optimizer.zero_grad()
-                loss = loss_func(K, w2cam, pts3d, pix_loss) + loss_dust3r_w * loss_dust3r(cam2w, pts3d, lossd)
+                loss = loss_func(K, w2cam, pts3d, pix_loss) + loss_dust3r_w * loss_dust3r(cam2w, pts3d, lossd) # loss_dst3r_w = 0.01
                 loss.backward()
-                optimizer.step()
+                optimizer.step() # when parameters change
 
                 # make sure the pose remains well optimizable
                 for i in range(len(imgs)):
-                    quats[i].data[:] /= quats[i].data.norm()
+                    quats[i].data[:] /= quats[i].data.norm() # make sure the quaternion norm is 1
 
                 loss = float(loss)
                 if loss != loss:
@@ -438,6 +447,7 @@ def sparse_scene_optimizer(imgs, subsample, imsizes, pps, base_focals, core_dept
         log_sizes[i].requires_grad_(trainable)
         core_depth[i].requires_grad_(False)
 
+    time_optim = time.time()
     res_coarse = optimize_loop(loss_3d, lr_base=lr1, niter=niter1, pix_loss=loss1)
 
     res_fine = None
@@ -458,7 +468,8 @@ def sparse_scene_optimizer(imgs, subsample, imsizes, pps, base_focals, core_dept
         print('Final focal (shared) = ', to_numpy(K[0, 0, 0]).round(2))
     else:
         print('Final focals =', to_numpy(K[:, 0, 0]))
-
+    print('Optimization took', time.time() - time_optim, 's')
+    
     return imgs, res_coarse, res_fine
 
 
@@ -526,7 +537,8 @@ def make_dense_pts3d(intrinsics, cam2w, depthmaps, canonical_paths, subsample, d
 def forward_mast3r(pairs, model, cache_path, desc_conf='desc_conf',
                    device='cuda', subsample=8, **matching_kw):
     res_paths = {}
-
+    time_inter = 0
+    time_corres = 0
     for img1, img2 in tqdm(pairs):
         idx1 = hash_md5(img1['instance'])
         idx2 = hash_md5(img2['instance'])
@@ -543,7 +555,9 @@ def forward_mast3r(pairs, model, cache_path, desc_conf='desc_conf',
         if not all(os.path.isfile(p) for p in (path1, path2, path_corres)):
             if model is None:
                 continue
+            str_infer = time.time()
             res = symmetric_inference(model, img1, img2, device=device)
+            time_inter += time.time() - str_infer
             X11, X21, X22, X12 = [r['pts3d'][0] for r in res]
             C11, C21, C22, C12 = [r['conf'][0] for r in res]
             descs = [r['desc'][0] for r in res]
@@ -554,7 +568,9 @@ def forward_mast3r(pairs, model, cache_path, desc_conf='desc_conf',
             torch.save(to_cpu((X22, C22, X12, C12)), mkdir_for(path2))
 
             # perform reciprocal matching
+            str_corres = time.time()
             corres = extract_correspondences(descs, qonfs, device=device, subsample=subsample)
+            time_corres += time.time() - str_corres
 
             conf_score = (C11.mean() * C12.mean() * C21.mean() * C22.mean()).sqrt().sqrt()
             matching_score = (float(conf_score), float(corres[2].sum()), len(corres[2]))
@@ -565,6 +581,8 @@ def forward_mast3r(pairs, model, cache_path, desc_conf='desc_conf',
 
     del model
     torch.cuda.empty_cache()
+
+    print(f'Inference time: {time_inter:.2f}s, Correspondences time: {time_corres:.2f}s')
 
     return res_paths, cache_path
 
@@ -580,18 +598,19 @@ def symmetric_inference(model, img1, img2, device):
 
     def decoder(feat1, feat2, pos1, pos2, shape1, shape2):
         dec1, dec2 = model._decoder(feat1, pos1, feat2, pos2)
+
         with torch.cuda.amp.autocast(enabled=False):
             res1 = model._downstream_head(1, [tok.float() for tok in dec1], shape1)
             res2 = model._downstream_head(2, [tok.float() for tok in dec2], shape2)
-        return res1, res2
-
+            
+        return res1, res2 # X, C
+    
     # decoder 1-2
     res11, res21 = decoder(feat1, feat2, pos1, pos2, shape1, shape2)
     # decoder 2-1
     res22, res12 = decoder(feat2, feat1, pos2, pos1, shape2, shape1)
 
-    return (res11, res21, res22, res12)
-
+    return (res11, res21, res22, res12) # X11, C11, X21, C21
 
 def extract_correspondences(feats, qonfs, subsample=8, device=None, ptmap_key='pred_desc'):
     feat11, feat21, feat22, feat12 = feats
@@ -609,6 +628,7 @@ def extract_correspondences(feats, qonfs, subsample=8, device=None, ptmap_key='p
     idx2 = []
     qonf1 = []
     qonf2 = []
+    
     # TODO add non symmetric / pixel_tol options
     for A, B, QA, QB in [(feat11, feat21, qonf11.cpu(), qonf21.cpu()),
                          (feat12, feat22, qonf12.cpu(), qonf22.cpu())]:
