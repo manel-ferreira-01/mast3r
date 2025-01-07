@@ -130,3 +130,5 @@ dmypy.json
 
 images_in/
 output/
+
+test_images/*
