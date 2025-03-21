@@ -5,16 +5,7 @@ import torch
 import time
 import numpy as np
 
-def is_near_motion_mask(motion_mask, x, y, distance=5):
-    x = int(x)
-    y = int(y)
-    for i in range(-distance, distance):
-        for j in range(-distance, distance):
-            if motion_mask[y + i, x + j]:
-                return True
-    return False
-
-def find_mask(cotracker_model, device, img1, img2, grid_size=45, epipolarReproj=1.0, alpha= 0.05,
+def find_mask(cotracker_model, device, img1, img2, grid_size=45, epipolarReproj=1.0,
               raft_model=None, model="homography"):
 
     if raft_model is None:
@@ -39,7 +30,7 @@ def find_mask(cotracker_model, device, img1, img2, grid_size=45, epipolarReproj=
 
         #print("Time to compute flow: ", time.time()-start)
 
-    if not "homography":
+    if not model == "homography":
 
         # Check for visibility here
         #visibility_mask = pred_visibility.cpu().numpy().squeeze()[0,:]
@@ -60,7 +51,7 @@ def find_mask(cotracker_model, device, img1, img2, grid_size=45, epipolarReproj=
 
         flow = pts2 - pts1
         
-        H, _ = cv.findHomography(pts1, pts2, cv.RANSAC, 5.0)
+        H, _ = cv.findHomography(pts1, pts2, cv.RANSAC)
 
         coords = np.hstack((pts1, np.ones((pts1.shape[0], 1))))
         transformed_coords = H @ coords.T
@@ -77,13 +68,13 @@ def find_mask(cotracker_model, device, img1, img2, grid_size=45, epipolarReproj=
         #normalize the magnitude
         magnitude /= np.max(magnitude)
 
-        motion_mask = magnitude > 0.15
+        motion_mask = magnitude > 0.2
         
         #grid_resized = cv.resize(motion_mask.reshape(grid_size, grid_size).astype(np.uint8),\
         #                          (img2["img"].shape[3], img2["img"].shape[2]))
 
-        kernel = np.ones((5, 5), np.uint8)
-        motion_mask = cv.dilate(motion_mask.astype(np.uint8), kernel, iterations=5)
+        #kernel = np.ones((5, 5), np.uint8)
+        #motion_mask = cv.dilate(motion_mask.astype(np.uint8), kernel, iterations=5)
 
         if raft_model is not None:
             return 1-motion_mask.reshape(img2["img"].shape[2], img2["img"].shape[3]).astype(np.int64)
