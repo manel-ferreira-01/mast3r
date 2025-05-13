@@ -20,7 +20,7 @@ def viz_graph(filelist, pairs):
     #pos = nx.spring_layout(G, k=0.5)  # Increase the value of k to spread nodes further apart
     # Other layout options include:
     #pos = nx.circular_layout(G)
-    # pos = nx.random_layout(G)
+    #pos = nx.random_layout(G)
     # pos = nx.shell_layout(G)
     # pos = nx.spectral_layout(G)
     pos = nx.kamada_kawai_layout(G)
