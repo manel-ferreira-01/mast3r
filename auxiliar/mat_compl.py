@@ -28,6 +28,9 @@ def alternating_matrix_completion(M_obs, rank=5, max_iters=100, tol=1e-4, verbos
     U = np.random.randn(m, rank)
     V = np.random.randn(n, rank)
 
+    #save error over iterations
+    error_list = []
+
     for iteration in tqdm(range(max_iters)):
         # Fix V, solve for U
         for i in range(m):
@@ -48,10 +51,16 @@ def alternating_matrix_completion(M_obs, rank=5, max_iters=100, tol=1e-4, verbos
         # Compute reconstruction error on observed entries
         M_hat = U @ V.T
         error = np.linalg.norm((M_hat - M_obs)[mask]) / np.sqrt(np.sum(mask))
+        error_list.append(error)
+
         if verbose:
             pass
             #print(f"Iteration {iteration+1}: RMSE = {error:.6f}")
         if error < tol:
             break
 
-    return U @ V.T
+        # if error remains constant, break
+        if iteration > 0 and abs(error - error_list[-2]) < tol:
+            break
+
+    return U @ V.T, np.array(error_list)
