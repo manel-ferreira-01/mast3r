@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 
 def alternating_matrix_completion(M_obs, rank=5, max_iters=100, tol=1e-4, verbose=False):
     """
@@ -27,11 +28,11 @@ def alternating_matrix_completion(M_obs, rank=5, max_iters=100, tol=1e-4, verbos
     U = np.random.randn(m, rank)
     V = np.random.randn(n, rank)
 
-    for iteration in range(max_iters):
+    for iteration in tqdm(range(max_iters)):
         # Fix V, solve for U
         for i in range(m):
             idx = mask[i, :]
-            if np.any(idx):
+            if np.any(idx): # if there is at least one observed entry
                 V_sub = V[idx, :]
                 M_sub = M_obs[i, idx]
                 U[i, :] = np.linalg.lstsq(V_sub, M_sub, rcond=None)[0]
@@ -48,7 +49,8 @@ def alternating_matrix_completion(M_obs, rank=5, max_iters=100, tol=1e-4, verbos
         M_hat = U @ V.T
         error = np.linalg.norm((M_hat - M_obs)[mask]) / np.sqrt(np.sum(mask))
         if verbose:
-            print(f"Iteration {iteration+1}: RMSE = {error:.6f}")
+            pass
+            #print(f"Iteration {iteration+1}: RMSE = {error:.6f}")
         if error < tol:
             break
 
